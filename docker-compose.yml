@@ -1,0 +1,68 @@
+version: "3.9"
+
+# ── Shared volume ─────────────────────────────────────────────────────────────
+# The trainer writes model artifacts here; the API reads from the same place.
+# In production you'd replace this with S3 / GCS / Azure Blob.
+volumes:
+  model-artifacts:
+  mlflow-data:
+
+services:
+
+  # ── MLflow Tracking Server ─────────────────────────────────────────────────
+  # Stores experiment runs, metrics, parameters, and model artifacts.
+  # Think of it as "git + GitHub" but for ML experiments.
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.13.0
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Training Job ───────────────────────────────────────────────────────────
+  # Runs once, trains the model, logs to MLflow, saves artifact to shared volume.
+  # In production: replace with a Kubernetes Job, Airflow DAG, or GitHub Actions step.
+  trainer:
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+    volumes:
+      - model-artifacts:/app/models
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    profiles: ["train"]
+
+  # ── Prediction API ─────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "8000:8000"
+    volumes:
+      - model-artifacts:/app/models
+    environment:
+      - MODEL_DIR=/app/models
+    depends_on:
+      - mlflow
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

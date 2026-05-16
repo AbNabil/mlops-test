@@ -1,0 +1,21 @@
+# API / serving container
+# This is a long-running service that loads the trained model and serves predictions.
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir setuptools==69.5.1 && \
+    pip install --no-cache-dir -r requirements.txt
+
+COPY src/ ./src/
+COPY api/ ./api/
+
+# The models/ directory is mounted as a volume — same artifact the trainer wrote
+VOLUME ["/app/models"]
+
+EXPOSE 8000
+
+# --workers 1 keeps it simple; scale horizontally with multiple containers
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

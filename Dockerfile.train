@@ -1,0 +1,22 @@
+# Training container
+# This runs once (or on a schedule) to produce a new model artifact.
+# In a real pipeline this would be triggered by a CI job or an orchestrator
+# like Airflow / Prefect / Argo Workflows.
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies first (layer caching — only re-runs when requirements change)
+COPY requirements.txt .
+RUN pip install --no-cache-dir setuptools==69.5.1 && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy source code
+COPY src/ ./src/
+
+# The models/ directory is mounted as a volume so the artifact persists
+# after the container exits and can be picked up by the API container.
+VOLUME ["/app/models"]
+
+CMD ["python", "src/train.py"]

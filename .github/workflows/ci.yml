@@ -1,0 +1,60 @@
+name: MLOps CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── 1. Train + smoke test ───────────────────────────────────────────────────
+  # Verifies the training pipeline works and the model produces correct predictions.
+  # This is the ML equivalent of "unit tests" in a normal software project.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Train model
+        run: python src/train.py
+        env:
+          # Use local file tracking in CI — no MLflow server needed
+          MLFLOW_TRACKING_URI: "file:./mlruns"
+
+      - name: Smoke test — verify predictions are correct
+        run: python src/predict.py
+
+  # ── 2. Build & push Docker image ────────────────────────────────────────────
+  # Only runs on pushes to main (not on PRs) after tests pass.
+  # Pushes two tags: 'latest' and the exact git commit SHA for traceability.
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push API image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.api
+          push: true
+          tags: |
+            abnabil/mlops:latest
+            abnabil/mlops:${{ github.sha }}
