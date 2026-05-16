@@ -1,0 +1,29 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: iris-api
+  namespace: argocd
+spec:
+  project: default
+
+  # Where to pull the config from — your GitHub repo
+  source:
+    repoURL: https://github.com/AbNabil/mlops-test
+    targetRevision: main
+    path: helm/iris-api          # path to the Helm chart inside the repo
+    helm:
+      valueFiles:
+        - values.yaml
+
+  # Where to deploy
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+
+  syncPolicy:
+    # Automatically sync when the repo changes
+    automated:
+      prune: true      # delete resources removed from git
+      selfHeal: true   # revert manual kubectl changes — git is the source of truth
+    syncOptions:
+      - CreateNamespace=true   # create the mlops namespace if it doesn't exist

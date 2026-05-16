@@ -1,0 +1,39 @@
+# Default values — used for local/dev.
+# Override per environment with values-prod.yaml
+
+replicaCount: 2
+
+image:
+  repository: abnabil/mlops
+  tag: latest
+  pullPolicy: Always
+
+imagePullSecrets:
+  - name: dockerhub-secret
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+ingress:
+  enabled: true
+  className: nginx
+  host: iris-api.local
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: "256Mi"
+  limits:
+    cpu: "500m"
+    memory: "512Mi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+env:
+  MODEL_DIR: /app/models
